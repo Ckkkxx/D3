@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<style>
+	.classDiv {
+		width: 30px;
+		border-radius: 3px;
+		height: 20px;
+		line-height: 20px;
+		color: #fff;
+		text-align: center;
+		background: rgb(246,43,83);
+		font-size: 10px;
+		opacity: 0.7;
+	}
+	
+	.divEm {
+		display: block;
+		border-width: 5px;
+		position: absolute;
+		bottom: -10px;
+		left: 11px;
+		border-style: solid dashed dashed;
+		border-color: rgb(246,43,83) transparent transparent;
+		font-size: 0;
+		line-height: 0;
+		opacity: 0.7;
+	}
+</style>
+		
+<body>
+	<div style="width:100%;height:100%" id="mainDown"></div>
+	<script src="d3.v5.js"></script>
+	<script>
+		var typeKey = "false";
+		var clickTypeData = {};
+		var data = [{
+				key: 'a',
+				values: [90, 133, 101, 80, 120, 130, 70, 53, 81, 150, 130, 20]
+			},
+
+			{
+				key: 'c',
+				values: [0, 30, 100, 33, 101, 120, 150, 90, 110, 133, 161, 175]
+			}
+		];
+		clickTypeData = data;
+		var margin = {
+			left: 60,
+			top: 40,
+			right: 20,
+			bottom: 40
+		}
+		var width = 960 - margin.left - margin.right,
+			height = 500 - margin.top - margin.bottom,
+			svg = d3.select('#mainDown').append('svg')
+			.attr('width', width + margin.left + margin.right)
+			.attr('height', height + margin.top + margin.bottom)
+			.style('box-shadow', '0px 0px 25px')
+			.style('margin', 'auto')
+			.append('g')
+			.attr('transform', 'translate(' + [margin.left, margin.top] + ')')
+
+		var x = d3.scaleLinear()
+			.range([0, width])
+			.domain([0, data[0].values.length - 1])
+		var y = d3.scaleLinear()
+			.range([height, 0])
+			.domain([0, d3.max(data, d => d3.max(d.values, v => v))])
+		var area = d3.area()
+			.x((d, i) => x(i))
+			.y0(y(0))
+			.y1(d => y(d))
+			.curve(d3.curveMonotoneX)
+		var line = d3.line()
+			.x((d, i) => x(i))
+			.y(d => y(d))
+			.curve(d3.curveMonotoneX)
+		var color = d3.scaleOrdinal(d3.schemeDark2)
+		color.domain(data.map(d => d.key))
+
+		var title = svg.append('text')
+			.text('Generic Title')
+			.attr('x', width / 2)
+			.attr('y', -10)
+			.attr('font-size', 25)
+			.attr('text-anchor', 'middle')
+
+		var legend = svg.selectAll('g.legendItems')
+			.data(color.domain())
+			.enter().append('g')
+			.attr('class', d => 'legendItems ' + d)
+			.style('cursor', 'pointer')
+			.on('mouseover', (a, b, c) => mouseOver(a, b, c))
+			.on('mouseout', (a, b, c) => mouseOut(a, b, c))
+			.on('click', (a, b, c) => click(a, b, c))
+		legend.append('rect')
+			.attr('width', 10)
+			.attr('height', 10)
+			.attr('stroke', function(d) {
+				return color(d);
+			})
+			.attr('stroke-width', 2)
+			.attr('fill', function(d) {
+				return color(d);
+			})
+			.attr('fill-opacity', .7);
+		legend.append('text')
+			.text(function(d) {
+				return d.replace(/^\w/, c => c.toUpperCase());
+			})
+			.attr('x', 15)
+			.attr('y', 10);
+
+		var moveLegend = 0;
+		legend.each(function(g) {
+			var gDiv = svg.select('g.' + g.replace(/\s|\//, ''));
+			var gWidth = gDiv.node().getBoundingClientRect().width + 10;
+			moveLegend += gWidth;
+			gDiv.attr('transform', 'translate(' + [(moveLegend - gWidth) + 40, -20] + ')');
+		});
+
+		var defs = svg.append('defs')
+		var lineGrads = defs.selectAll("linearGradient")
+			.data(color.domain())
+			.enter().append('linearGradient')
+			.attr("id", d => d)
+			.attr("x2", "0%")
+			.attr("y2", "100%");
+
+		lineGrads.append("stop")
+			.attr('class', 'start')
+			.attr("offset", "0%")
+			.attr("stop-color", d => color(d))
+			.attr('stop-opacity', .15)
+
+		lineGrads.append("stop")
+			.attr('class', 'end')
+			.attr("offset", "100%")
+			.attr("stop-color", '#fff')
+			.attr('stop-opacity', 0)
+
+		svg.append('g')
+			.attr('transform', 'translate(0,' + height + ')')
+			.call(d3.axisBottom(x))
+			.call(g => {
+				g.select('.tick:last-of-type text').clone()
+					.attr('y', 20)
+					.attr('text-anchor', 'middle')
+					.attr('font-weight', 'bold')
+					.attr('font-size', 12)
+					.text('X Axis')
+			})
+		svg.append('g')
+			.attr('transform', 'translate(' + width + ',0)')
+			.call(d3.axisLeft(y).tickSize(width))
+			.call(g => {
+				g.select('.domain').remove()
+				g.selectAll('line')
+					.attr('stroke', '#aaa')
+					.attr("stroke-dasharray", "2,2");
+				g.select('.tick:last-of-type text').clone()
+					.attr('y', -40)
+					.attr('text-anchor', 'middle')
+					.attr('font-weight', 'bold')
+					.attr('font-size', 12)
+					.attr('transform', 'rotate(-90)')
+					.text('Y Axis')
+				g.select('.tick:first-of-type line').remove()
+			});
+
+
+		var areas = svg.selectAll('g.area')
+			.data(data)
+			.enter().append('g')
+			.attr('class', d => 'area ' + d.key)
+
+		var ease = d3.easeQuad
+
+		var lines = areas.append('path')
+			.attr('class', 'linePath')
+			.datum(d => d)
+			.attr('d', d => line(new Array(d.values.length).fill(0)))
+			.transition().delay((d, i) => 150 * i)
+			.ease(ease)
+			.attr('d', d => line(d.values))
+			.attr('fill', 'none')
+			.attr('stroke', d => color(d.key))
+			.attr('stroke-width', 2)
+		areas.append('path')
+			.attr('class', 'areaPath')
+			.datum(d => d)
+			.attr('d', d => area(new Array(d.values.length).fill(0)))
+			.transition().delay((d, i) => 150 * i)
+			.ease(ease)
+			.attr('d', d => area(d.values))
+			.attr('fill', d => 'url(#' + d.key + ')')
+
+		svg.append('g')
+			.attr('transform', 'translate(0,0)')
+			.attr('fill', '#ccc')
+			.attr('z-index', 100)
+			.attr('stroke-width', 2)
+			.call(d3.axisBottom(x).tickSize(height).ticks(11))
+			.attr('class', 'setColor')
+			.call(g => {
+				g.select('.domain').remove().attr('z-index', 100)
+				g.selectAll('line')
+					.attr('stroke', 'rgb(67,142,185)')
+					.attr('opacity', .2)
+					.attr('z-index', 100)
+				g.selectAll('text')
+					.attr("fill", "transparent")
+			})
+			.on("mouseover", g => {
+				var e = e || window.event;
+				init(e);
+			})
+		// 
+		//绘制气泡位置
+		var clickTypeData_values;
+		let init = (e) => {
+			clickTypeData.forEach((item, i) => {
+				if (typeKey == clickTypeData[i].key) {
+					clickTypeData_values = clickTypeData[i].values;
+				}
+			})
+			if (typeKey != "false") {
+				e.path[0].setAttribute("opacity", 1);
+				e.path[0].setAttribute("style", `border:1px solid red;width:5px`);
+				let vals = e.path[0].parentNode.getAttribute('transform');
+				let valName = e.path[0].parentNode.getAttribute('name');
+				valName = valName.split('y')[1];
+				let id = document.getElementById("mainDown");
+				let childSpan = document.createElement("div");
+				let childEm = document.createElement("em");
+				let pxS = vals.split(",");
+				
+				pxS = pxS[0].split('(');
+				pxS = parseInt(pxS[1]) + 52;
+				childSpan.setAttribute('class', "classDiv");
+				childSpan.setAttribute('style', `pointer-events: none;Position:absolute;left:${pxS}px;top:60px`);
+				childSpan.innerText = initValue(typeKey, clickTypeData_values[valName]);
+				childEm.setAttribute('class', 'divEm');
+				childSpan.appendChild(childEm);
+				id.appendChild(childSpan);
+				e.path[0].addEventListener("mouseout", function() {
+					setTimeout(function() {
+						e.path[0].setAttribute("opacity", 0.2);
+						id.removeChild(childSpan);
+					}, 100)
+				}, false);
+			}
+		}
+		// 		//获取气泡显示值
+		let initValue = (type, key) => {
+			return key
+		}
+
+		function mouseOver(a, b, c) {
+			color.domain().filter(d => d != a)
+				.forEach(d => {
+					svg.select('g.area.' + d)
+						.transition()
+						.style('opacity', .2)
+				})
+		}
+
+		function mouseOut(a, b, c) {
+			svg.selectAll('g.area')
+				.transition()
+				.style('opacity', 1)
+		}
+
+		function click(a, b, c) {
+			typeKey = a;
+			if (d3.select(c[b]).classed('clicked')) {
+				d3.select(c[b]).classed('clicked', false)
+					.select('rect').attr('fill', '#bbb')
+				c.filter(d => d != c[b] && d3.select(d).classed('clicked'))
+					.forEach(d => {
+						d3.select(d).select('rect')
+							.attr('fill', v => color(v))
+					})
+
+				var filter = c.filter(d => !d3.select(d).classed('clicked'))
+				if (filter.length === c.length) {
+					filter.forEach(d => {
+						d3.select(d).select('rect')
+							.attr('fill', d => color(d))
+						var singleArea = d3.select('g.area.' + d3.select(d).data())
+						singleArea.select('.areaPath').transition()
+							.ease(ease)
+							.attr('d', d => area(d.values))
+
+						singleArea.select('.linePath').transition()
+							.ease(ease)
+							.attr('d', d => line(d.values))
+
+					})
+				} else {
+					filter.forEach(d => {
+						d3.select(d).select('rect')
+							.attr('fill', '#bbb')
+						var singleArea = d3.select('g.area.' + d3.select(d).data())
+						singleArea.select('.areaPath').transition()
+							.ease(ease)
+							.attr('d', d => area(new Array(d.values.length).fill(0)))
+
+						singleArea.select('.linePath').transition()
+							.ease(ease)
+							.attr('d', d => line(new Array(d.values.length).fill(0)))
+
+					})
+				}
+			} else {
+				d3.select(c[b]).classed('clicked', true)
+				d3.select(c[b]).select('rect').attr('fill', v => color(v))
+				c.filter(d => d != c[b] && !d3.select(d).classed('clicked'))
+					.forEach(d => {
+						d3.select(d).select('rect')
+							.attr('fill', '#bbb')
+						var singleArea = d3.select('g.area.' + d3.select(d).data())
+						singleArea.select('.areaPath').transition()
+							.ease(ease)
+							.attr('d', d => area(new Array(d.values.length).fill(0)))
+
+						singleArea.select('.linePath').transition()
+							.ease(ease)
+							.attr('d', d => line(new Array(d.values.length).fill(0)))
+
+					})
+				c.filter(d => d3.select(d).classed('clicked'))
+					.forEach(d => {
+						var singleArea = d3.select('g.area.' + d3.select(d).data())
+						singleArea.select('.areaPath').transition()
+							.ease(ease)
+							.attr('d', d => area(d.values))
+
+						singleArea.select('.linePath').transition()
+							.ease(ease)
+							.attr('d', d => line(d.values))
+
+					})
+			}
+		}
+	</script>
+</body>
+</html>
